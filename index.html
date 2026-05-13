@@ -1,0 +1,1856 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DISTO — Tuner</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Narrow:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --red:#f02d14;
+    --black:#000;
+    --bone:#0a0908;
+    --paper:#161311;
+    --ink:#d8d0c0;
+    --ink-mid:#9a948a;
+    --ink-dim:#7a766e;
+    --ink-low:#3a3429;
+    --rule:rgba(216,208,192,.14);
+    --rule-strong:rgba(216,208,192,.32);
+
+    --hero:"Anton", "Archivo Narrow", sans-serif;
+    --sans:"Space Grotesk", sans-serif;
+    --body:"Inter", sans-serif;
+    --mono:"JetBrains Mono", ui-monospace, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bone);color:var(--ink);font-family:var(--body);font-weight:300;-webkit-font-smoothing:antialiased}
+  body{min-height:100vh;position:relative;overflow-x:hidden}
+
+  /* ============ Grain ============ */
+  .grain{position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.14;mix-blend-mode:screen;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.2 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+
+  /* ============ Strips ============ */
+  .strip{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    height:52px;padding:0 26px;border-bottom:1px solid var(--rule);
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim);
+    position:sticky;top:0;z-index:40;background:var(--bone)}
+  .strip.bottom{border-bottom:0;border-top:1px solid var(--rule);position:relative;height:auto;padding:18px 26px}
+  .strip .brand-logo{height:24px;width:auto;display:block}
+  .strip .meta{display:flex;gap:28px;align-items:center}
+  .strip .meta b{color:var(--ink);font-weight:500}
+  .strip .dot{width:6px;height:6px;border-radius:50%;background:var(--red);display:inline-block;vertical-align:middle;margin-right:8px;animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+  /* ============ Vertical side rails ============ */
+  .vside{position:fixed;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--ink-dim);writing-mode:vertical-rl;z-index:35;pointer-events:none;padding:80px 0}
+  .vside.l{left:6px;transform:rotate(180deg)}
+  .vside.r{right:6px}
+  .vside .red{color:var(--red)}
+  @media (max-width:760px){.vside{display:none}}
+
+  /* ============ Page frame ============ */
+  .page{max-width:1280px;margin:0 auto;padding:0 56px}
+  @media (max-width:760px){.page{padding:0 22px}}
+
+  /* ============ HERO ============ */
+  .hero{position:relative;width:100%;height:100vh;height:100dvh;min-height:560px;max-height:none;overflow:hidden;background:var(--bone)}
+  .hero-surface{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1;
+    image-rendering:pixelated; image-rendering:crisp-edges;
+    -ms-interpolation-mode:nearest-neighbor;
+    filter:contrast(1.20) brightness(0.12);}
+  .hero-frag{position:absolute;left:0;top:0;width:60vw;will-change:transform,opacity,clip-path;user-select:none;pointer-events:none;z-index:6;transform-origin:0 0}
+  .hero-frag img{width:100%;display:block;filter:brightness(0) invert(1) blur(22px)}
+  /* analog grit — dense SVG noise on top of canvas only */
+  .hero-grit{position:absolute;inset:0;pointer-events:none;z-index:3;opacity:.38;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size:220px 220px;animation:hero-grit-shift 1.4s steps(4,end) infinite}
+  @keyframes hero-grit-shift{0%{background-position:0 0}25%{background-position:33px -22px}50%{background-position:-18px 41px}75%{background-position:56px 12px}100%{background-position:0 0}}
+  /* unfocus / glass FX over the canvas only */
+  .hero-defocus{position:absolute;inset:0;pointer-events:none;z-index:2;
+    backdrop-filter:blur(6px) contrast(1.05) brightness(0.40);
+    -webkit-backdrop-filter:blur(6px) contrast(1.05) brightness(0.40);
+    background:radial-gradient(ellipse 70% 55% at 50% 50%, rgba(0,0,0,.36) 0%, rgba(0,0,0,.72) 70%, rgba(0,0,0,.92) 100%)}
+  .hero::after{content:"";position:absolute;inset:0;background:
+      linear-gradient(180deg, rgba(10,9,8,.20) 0%, transparent 22%, transparent 78%, rgba(10,9,8,.45) 100%);
+    z-index:2;pointer-events:none}
+  .hero-overlay{position:absolute;inset:0;z-index:3;display:grid;grid-template-rows:auto 1fr auto;padding:40px 36px clamp(60px, 9vh, 120px);pointer-events:none}
+  .hero-overlay > *{pointer-events:auto}
+  .hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;font-family:var(--mono);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink)}
+  .hero-top .l, .hero-top .r{display:flex;flex-direction:column;gap:5px}
+  .hero-top .r{text-align:right}
+  .hero-top b{color:var(--ink);font-weight:500}
+  .hero-top .dim{color:var(--ink-dim)}
+  .hero-center{align-self:end;display:flex;flex-direction:column;gap:18px;padding-left:8px}
+  .hero-title{margin:0;font-family:var(--hero);font-weight:400;font-size:clamp(28px, 4.4vw, 64px);letter-spacing:1.2em;line-height:1;text-transform:uppercase;color:var(--ink);white-space:nowrap}
+  .hero-sub{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.42em;text-transform:uppercase;color:var(--ink);padding-left:6px}
+  .hero-sub b{color:var(--red);font-weight:500;letter-spacing:.22em}
+  .hero-foot{display:flex;justify-content:space-between;align-items:end;gap:24px;font-family:var(--mono);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim)}
+  .hero-foot .scrolldown{display:inline-flex;flex-direction:column;align-items:center;gap:6px;color:var(--ink)}
+  .hero-foot .scrolldown .arr{color:var(--red);font-size:14px;animation:slide-down 2.6s ease-in-out infinite}
+  @keyframes slide-down{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+
+  /* Tuner LED bar */
+  .tuner{display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);min-width:240px}
+  .tuner-head{display:flex;justify-content:space-between;width:100%;color:var(--ink-dim)}
+  .tuner-head b{color:var(--ink);font-weight:500}
+  .tuner-leds{display:inline-grid;grid-template-columns:repeat(5,12px);gap:4px;align-items:center;padding:6px 6px;border:1px solid var(--rule);background:rgba(0,0,0,.35);position:relative;justify-self:end}
+  .tuner-leds .led{width:100%;height:7px;background:rgba(216,208,192,.10);transition:background .12s linear, box-shadow .12s linear;position:relative}
+  .tuner-leds .led.flat{background:rgba(216,208,192,.22)}
+  .tuner-leds .led.on{background:var(--ink);box-shadow:0 0 6px rgba(216,208,192,.5)}
+  .tuner-leds .led.center{background:rgba(240,45,20,.18)}
+  .tuner-leds .led.center.on{background:var(--red);box-shadow:0 0 8px 1px rgba(240,45,20,.6), 0 0 18px 4px rgba(240,45,20,.25)}
+  /* lock celebration — brief flash + ring pulse + sustained intensity */
+  .tuner-leds.locked{position:relative;border-color:rgba(240,45,20,.55)}
+  .tuner-leds.locked .led.center.on{background:var(--red);box-shadow:0 0 10px 2px rgba(240,45,20,.9), 0 0 26px 8px rgba(240,45,20,.45), 0 0 56px 14px rgba(240,45,20,.18);animation:lock-pulse 1.6s ease-in-out infinite}
+  @keyframes lock-pulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.35)}}
+  .tuner-leds.locked::after{content:"";position:absolute;inset:-4px;border:1px solid var(--red);pointer-events:none;animation:lock-ring 1.2s ease-out forwards}
+  @keyframes lock-ring{0%{opacity:.9;inset:-2px}100%{opacity:0;inset:-18px}}
+  .tuner-leds.locked .led:not(.center){background:rgba(240,45,20,.10)}
+  .tuner-leds .center-mark{position:absolute;left:50%;top:-7px;transform:translateX(-50%);width:1px;height:5px;background:var(--ink-dim)}
+  .tuner-leds .center-mark.bot{top:auto;bottom:-7px}
+  .tuner-scale{display:flex;justify-content:space-between;width:100%;font-size:9px;letter-spacing:.18em;color:var(--ink-low)}
+  .tuner-scale .lock{color:var(--red);transition:opacity .2s linear;opacity:.35}
+  .tuner-scale .lock.on{opacity:1}
+  .tuner-readout{display:flex;justify-content:space-between;align-items:baseline;width:100%;font-family:var(--mono)}
+  .tuner-readout .note{font-family:var(--hero);font-weight:400;font-size:38px;letter-spacing:.02em;color:var(--ink);line-height:1;text-transform:uppercase}
+  .tuner-readout .note .red{color:var(--red)}
+  .tuner-readout .freq{font-size:10px;letter-spacing:.18em;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .tuner-readout .freq b{color:var(--ink);font-weight:500}
+
+  .ebr{display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;align-items:baseline;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);margin-bottom:64px}
+  .ebr .l{grid-column:1/6;display:flex;gap:18px}
+  .ebr .l .num{color:var(--red)}
+  .ebr .r{grid-column:9/13;text-align:right}
+  .ebr .r b{display:block;color:var(--ink);font-weight:500;margin-top:4px}
+  .ebr .r .arr{color:var(--red);margin-left:6px}
+
+  /* ============ § 01 CALIBRATION ============ */
+  .calib{padding:140px 0 120px;display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;row-gap:0;position:relative}
+  .calib .ebr{grid-column:1/13}
+  /* reveal-on-lock — delayed so the LED celebration reads first */
+  .calib .reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease-out, transform .5s ease-out;transition-delay:var(--d,0ms);pointer-events:none}
+  .calib.locked .reveal{opacity:1;transform:none;pointer-events:auto;transition-delay:calc(var(--d,0ms) + 350ms)}
+  .calib-quote{grid-column:1/10;margin:0;font-family:var(--hero);font-weight:400;font-size:clamp(56px,9vw,160px);line-height:.92;letter-spacing:-.015em;text-transform:uppercase;color:var(--ink)}
+  .calib-quote .em{color:var(--red);font-style:normal}
+  .calib-quote .break{display:block}
+  .calib-aside{grid-column:9/13;align-self:end;font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim);line-height:1.7;padding-top:80px}
+  .calib-aside b{color:var(--ink);font-weight:500;display:block;margin-bottom:6px}
+  .calib-body{grid-column:6/12;margin-top:80px}
+  .calib-body::before{content:"[A1]";display:block;font-family:var(--mono);font-size:11px;letter-spacing:.24em;color:var(--red);margin-bottom:16px}
+  .calib-body p{margin:0 0 1em;font-size:18px;line-height:1.55;max-width:42ch;color:var(--ink);font-weight:300}
+  @media (max-width:820px){
+    .calib-quote{grid-column:1/13}
+    .calib-aside{grid-column:1/13;padding-top:24px}
+    .calib-body{grid-column:1/13}
+  }
+
+  /* ============ § 02 SIGNAL gallery ============ */
+  .gallery{position:relative;padding:80px 0 140px;display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;row-gap:0;border-top:1px solid var(--rule)}
+  .gallery .ebr{grid-column:1/13;margin-top:48px;margin-bottom:0}
+  .gal-row{grid-column:1/13;display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;align-items:start;position:relative;min-height:clamp(260px, 32vw, 420px);margin-top:-22px}
+  .gal-row.r1{margin-top:96px}
+  /* === §02 reveal-from-noise on scroll === */
+  .gal-row.noisy .gal-letter,
+  .gal-row.noisy .tag{
+    opacity:.12;
+    filter:blur(10px) contrast(0.8);
+    transition:opacity .9s ease-out, filter .9s ease-out;
+  }
+  .gal-row.tuned .gal-letter,
+  .gal-row.tuned .tag{
+    opacity:1;
+    filter:none;
+    transition:opacity .9s ease-out, filter .9s ease-out;
+  }
+  .gal-letter{font-family:var(--hero);font-weight:400;font-size:clamp(220px, 32vw, 480px);line-height:.78;letter-spacing:-.02em;text-transform:uppercase;color:var(--ink);margin:0;position:relative;z-index:2}
+  .gal-letter .red{color:var(--red)}
+  /* real DISTO logo dot — cropped piece of wordmark */
+  .gal-letter .red-dot{display:inline-block;width:.16em;height:.16em;vertical-align:baseline;margin-left:.05em;background:url('assets/DISTO-Dot-RED.png') center/contain no-repeat;transform:translateY(.08em)}
+  .gal-row .tag{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);align-self:start;padding-top:14px;max-width:24ch}
+  .gal-row .tag .num{color:var(--red);display:block;margin-bottom:6px}
+  .gal-row .tag b{color:var(--ink);font-weight:500;display:block;font-size:12px;margin-bottom:8px;letter-spacing:.18em}
+  .gal-row .tag .caption{font-family:var(--sans);font-weight:300;font-size:15px;line-height:1.4;letter-spacing:0;text-transform:none;color:var(--ink);font-style:italic}
+  .gal-row image-slot{display:block;width:100%;aspect-ratio:3/4;--is-bg:#15110e;--is-border:rgba(216,208,192,.08);position:relative;z-index:1}
+
+  .r1 .gal-letter{grid-column:1/8;align-self:start}
+  .r1 .gal-img{grid-column:9/12;margin-top:60px}
+  .r1 .tag{grid-column:9/13;grid-row:1;justify-self:end;text-align:right}
+
+  .r2 .gal-letter{grid-column:6/13;align-self:start;margin-top:-40px}
+  .r2 .gal-img{grid-column:2/5;margin-top:120px}
+  .r2 .tag{grid-column:1/5;grid-row:1;padding-top:6px}
+
+  .r3 .gal-letter{grid-column:2/9;align-self:start;margin-top:-20px}
+  .r3 .gal-img{grid-column:10/13;margin-top:200px}
+  .r3 .tag{grid-column:10/13;grid-row:1;text-align:right}
+
+  .r4 .gal-letter{grid-column:5/13;align-self:start}
+  .r4 .gal-img{grid-column:1/4;margin-top:60px}
+  .r4 .tag{grid-column:1/4;grid-row:1;padding-top:6px}
+
+  .r5 .gal-letter{grid-column:1/7;align-self:start;margin-top:35px}
+  .r5 .gal-img{grid-column:9/13;margin-top:140px}
+  .r5 .tag{grid-column:9/13;grid-row:1;text-align:right}
+
+  .r6 .gal-letter{grid-column:4/12;align-self:start}
+  .r6 .gal-img{grid-column:2/5;margin-top:60px}
+  .r6 .tag{grid-column:1/5;grid-row:1;padding-top:6px}
+
+  @media (max-width:820px){
+    .gal-row{grid-template-columns:repeat(6,1fr);min-height:auto;row-gap:18px;margin-top:48px}
+    .gal-letter{font-size:clamp(160px,42vw,260px) !important}
+    .r1 .gal-letter,.r2 .gal-letter,.r3 .gal-letter,.r4 .gal-letter,.r5 .gal-letter,.r6 .gal-letter{grid-column:1/7;margin-top:0}
+    .r1 .gal-img,.r2 .gal-img,.r3 .gal-img,.r4 .gal-img,.r5 .gal-img,.r6 .gal-img{grid-column:2/6;margin-top:24px}
+    .r1 .tag,.r2 .tag,.r3 .tag,.r4 .tag,.r5 .tag,.r6 .tag{grid-column:1/7;grid-row:auto;text-align:left;justify-self:start;max-width:none}
+  }
+
+  /* ============ § 03 PUSH / PULL ============ */
+  .pull{padding:140px 0 140px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;row-gap:0}
+  .pull .ebr{grid-column:1/13;transition:transform .6s ease-out}
+  .pull-mark{grid-column:1/8;font-family:var(--hero);font-weight:400;font-size:clamp(72px,11vw,200px);line-height:.86;letter-spacing:-.02em;text-transform:uppercase;color:var(--ink);margin:0 0 80px}
+  .pull-mark .slash{color:var(--red);padding:0 .08em;font-style:normal;display:inline-block;transition:transform .5s cubic-bezier(.2,.7,.2,1)}
+  .pull-col{grid-row:3}
+  .pull-col.push{grid-column:1/6}
+  .pull-col.pull{grid-column:8/13;margin-top:48px}
+  .pull-col h3{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--red);margin:0 0 28px;font-weight:500}
+  .pull-col h3 span{color:var(--ink-dim);margin-left:14px}
+  .pull-col ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:0}
+  .pull-col li{padding:18px 0;border-top:1px solid var(--rule);font-family:var(--sans);font-weight:300;font-size:18px;line-height:1.45;letter-spacing:0;color:var(--ink);transition:transform .5s cubic-bezier(.2,.7,.2,1), border-top-color .3s linear, color .3s linear;transform-origin:50% 0%}
+  .pull-col li:last-child{border-bottom:1px solid var(--rule);transition:transform .5s cubic-bezier(.2,.7,.2,1), border-bottom-color .3s linear, border-top-color .3s linear, color .3s linear}
+
+  /* ===== Push/Pull balance meter (seesaw) ===== */
+  .pull[data-balance="push"] .pull-col li{transform:skewY(1.4deg);border-top-color:rgba(240,45,20,.35)}
+  .pull[data-balance="push"] .pull-col.push li{border-top-color:rgba(240,45,20,.65);color:var(--ink)}
+  .pull[data-balance="push"] .pull-col.pull li{color:var(--ink-dim)}
+  .pull[data-balance="push"] .pull-mark .slash{transform:translate(12px,0) rotate(12deg)}
+  .pull[data-balance="push"] .ebr{transform:translateX(12px)}
+
+  .pull[data-balance="pull"] .pull-col li{transform:skewY(-1.4deg);border-top-color:rgba(240,45,20,.35)}
+  .pull[data-balance="pull"] .pull-col.pull li{border-top-color:rgba(240,45,20,.65);color:var(--ink)}
+  .pull[data-balance="pull"] .pull-col.push li{color:var(--ink-dim)}
+  .pull[data-balance="pull"] .pull-mark .slash{transform:translate(-12px,0) rotate(-12deg)}
+  .pull[data-balance="pull"] .ebr{transform:translateX(-12px)}
+  @media (max-width:820px){
+    .pull-mark{grid-column:1/13;margin-bottom:32px}
+    .pull-col.push,.pull-col.pull{grid-column:1/13}
+    .pull-col.pull{margin-top:48px}
+  }
+
+  /* ============ § 04 FINAL QUESTION ============ */
+  .question{padding:160px 0;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;position:relative}
+  .question .ebr{grid-column:1/13}
+  .q-mark{grid-column:1/13;font-family:var(--hero);font-weight:400;font-size:clamp(40px,5.6vw,96px);line-height:1.04;letter-spacing:-.012em;color:var(--ink);margin:0;text-wrap:balance;max-width:24ch}
+  .q-mark .em{color:var(--red);font-style:normal;display:inline-block;transform-origin:50% 70%;will-change:transform,opacity}
+  .q-aside{grid-column:9/13;align-self:end;font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-dim);text-align:right;line-height:1.7;margin-top:48px}
+  .q-aside b{color:var(--ink);font-weight:500;display:block;margin-bottom:4px}
+  @media (max-width:820px){.q-mark{grid-column:1/13;font-size:34px}.q-aside{grid-column:1/13;text-align:left}}
+
+  /* ============ § 05 STANZA ============ */
+  .stanza{padding:120px 0 120px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px;row-gap:0;position:relative}
+  .stanza .ebr{grid-column:1/13}
+  .stanza-img{grid-column:1/6;grid-row:2;aspect-ratio:3/4}
+  .stanza-img image-slot{display:block;width:100%;height:100%;--is-bg:#15110e;--is-border:rgba(216,208,192,.08)}
+  .stanza-text{grid-column:7/13;grid-row:2;align-self:center;font-family:var(--hero);font-weight:400;font-size:clamp(26px,3vw,42px);line-height:1.18;letter-spacing:-.005em;text-transform:none;color:var(--ink)}
+  .stanza-text .v{display:block;margin:0;padding:0}
+  .stanza-text .v + .v{margin-top:.22em}
+  .stanza-text .br{display:block;height:0.7em}
+  .stanza-text .em{color:var(--red);font-style:normal}
+  .stanza-sig{grid-column:7/13;grid-row:3;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);margin-top:32px;padding-top:16px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;gap:18px;align-items:baseline}
+  .stanza-sig b{color:var(--ink);font-weight:500}
+  .stanza-sig .red{color:var(--red)}
+  @media (max-width:820px){.stanza-img{grid-column:1/13}.stanza-text{grid-column:1/13;margin-top:32px}.stanza-sig{grid-column:1/13}}
+
+  .stanza .ebr .l{display:flex;gap:18px;align-items:center}
+  .stanza .play-led{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:10px;letter-spacing:.24em;color:var(--ink-dim);margin-left:14px}
+  .stanza .play-led .dot{width:6px;height:6px;border-radius:50%;background:rgba(216,208,192,.2)}
+  .stanza .play-led.on .dot{background:var(--red);box-shadow:0 0 6px rgba(240,45,20,.6)}
+
+  .stanza-img{grid-column:1/6;grid-row:2;aspect-ratio:3/4;position:relative;overflow:hidden;cursor:pointer;background:#000;border:1px solid rgba(216,208,192,.08)}
+  .stanza-img.playing{cursor:default}
+  .stanza-img canvas.stanza-noise{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;filter:contrast(1.15) brightness(0.6);z-index:1}
+  .stanza-img .stanza-play-hint{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:var(--ink);background:rgba(0,0,0,.55);z-index:3;transition:opacity .35s linear}
+  .stanza-img .stanza-play-hint .icon{font-family:var(--hero);font-size:42px;color:var(--red);line-height:1;margin-bottom:14px}
+  .stanza-img.playing .stanza-play-hint{opacity:0;pointer-events:none}
+  .stanza-img .stanza-vu{position:absolute;left:14px;bottom:14px;right:14px;height:2px;background:rgba(216,208,192,.12);z-index:2}
+  .stanza-img .stanza-vu i{display:block;height:100%;width:0%;background:var(--red);transition:width .08s linear}
+  .stanza-img .stanza-tag{position:absolute;top:14px;left:14px;font-family:var(--mono);font-size:9px;letter-spacing:.24em;color:var(--ink-dim);z-index:2;text-transform:uppercase}
+  .stanza-img .stanza-tag b{color:var(--ink);font-weight:500;display:block;margin-top:4px}
+
+  .stanza-text .word{display:inline-block;opacity:0;transform:translateY(4px) skewY(1deg);transition:opacity .85s ease-out, transform .85s ease-out;will-change:opacity,transform}
+  .stanza-text .word.lit{opacity:1;transform:none}
+  .stanza-text .em{color:var(--ink);font-style:normal;transition:color .25s linear}
+  .stanza-text .em.ignited{color:var(--red)}
+
+  /* ============ § 06 OUTPUT ============ */
+  .output{padding:140px 0 100px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(12,1fr);column-gap:24px}
+  .output .ebr{grid-column:1/13}
+  .out-mark{grid-column:1/9;font-family:var(--hero);font-weight:400;font-size:clamp(96px,16vw,260px);line-height:.84;letter-spacing:-.025em;text-transform:uppercase;color:var(--ink);margin:0}
+  .out-mark .red{color:var(--red)}
+  .out-aside{grid-column:9/13;align-self:end;font-family:var(--sans);font-size:14px;font-weight:300;line-height:1.5;color:var(--ink);max-width:30ch}
+  .out-aside p{margin:0 0 16px}
+  .out-cta{grid-column:1/13;margin-top:96px;padding-top:18px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+  .out-cta a{font-family:var(--hero);font-weight:400;font-size:clamp(28px,3.6vw,52px);letter-spacing:0;color:var(--ink);text-decoration:none;text-transform:lowercase;letter-spacing:-.005em;border-bottom:2px solid var(--red);padding-bottom:2px;transition:color .12s linear,background .12s linear}
+  .out-cta a:hover{color:var(--red)}
+  .out-cta .note b{color:var(--ink);font-weight:500;display:block}
+  @media (max-width:820px){.out-mark{grid-column:1/13}.out-aside{grid-column:1/13;margin-top:24px}.out-cta{margin-top:48px}}
+
+  /* ============ Colophon ============ */
+  .coda{padding:80px 0 80px;border-top:1px solid var(--rule);display:grid;grid-template-columns:1fr 1fr;gap:48px}
+  @media (max-width:760px){.coda{grid-template-columns:1fr;gap:24px}}
+  .coda .label{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim);display:block;margin-bottom:10px}
+  .coda p{margin:0;font-size:13px;line-height:1.55;color:var(--ink)}
+  .coda a{color:inherit;border-bottom:1px solid var(--ink);text-decoration:none}
+  .coda a:hover{color:var(--red);border-color:var(--red)}
+  /* ===================================================================== */
+  /* ============ MOBILE ADAPTATIONS — coherent across the site =========== */
+  /* ===================================================================== */
+  @media (max-width:760px){
+    html, body{overflow-x:hidden}
+
+    /* Strips — keep readable, no wrap */
+    .strip{height:46px;padding:0 16px;font-size:9px;letter-spacing:.18em;flex-wrap:nowrap;gap:10px;min-width:0}
+    .strip .brand-logo{height:18px;flex:0 0 auto}
+    .strip .meta{gap:12px;flex-wrap:nowrap;font-size:9px;min-width:0;overflow:hidden}
+    .strip .meta > span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .strip.bottom{height:auto;padding:14px 16px;flex-wrap:wrap}
+
+    /* Hero */
+    .hero{height:100svh;height:100dvh;min-height:480px;max-height:none}
+    .hero-overlay{padding:18px 18px clamp(36px, 7vh, 80px)}
+    .hero-top{font-size:8px;letter-spacing:.18em;gap:12px}
+    .hero-top b{font-size:9.5px}
+    .hero-title{font-size:clamp(22px, 8.5vw, 36px);letter-spacing:.5em;padding-left:0}
+    .hero-foot{font-size:8px;letter-spacing:.18em}
+
+    /* Page frame */
+    .page{padding:0 20px}
+
+    /* Section padding tightened */
+    .calib{padding:64px 0 48px}
+    .gallery{padding:32px 0 56px}
+    .pull{padding:64px 0 56px}
+    .question{padding:80px 0}
+    .stanza{padding:56px 0 64px}
+    .output{padding:64px 0 48px}
+    .coda{padding:48px 0 36px}
+
+    /* Eyebrows — single column, simple */
+    .ebr{grid-template-columns:1fr;row-gap:10px;margin-bottom:32px}
+    .ebr .l{grid-column:1;flex-wrap:wrap;gap:10px;font-size:10px;align-items:baseline}
+    .ebr .r{grid-column:1;text-align:left;font-size:10px}
+    .ebr .r b{font-size:11px}
+
+    /* Hide the inline tuner + play-led — distracting on small screens */
+    .tuner-leds{display:none !important}
+    .stanza .play-led{display:none !important}
+
+    /* §01 Calibration */
+    .calib-quote{font-size:clamp(40px, 10.5vw, 72px);grid-column:1/13}
+    .calib-aside{grid-column:1/13;padding-top:16px;font-size:10px;line-height:1.5}
+    .calib-body{grid-column:1/13;margin-top:32px}
+    .calib-body p{font-size:15.5px;max-width:none;line-height:1.55}
+    .calib-body::before{margin-bottom:12px}
+
+    /* §02 Gallery — shorter rows, smaller letters */
+    .gal-row{grid-template-columns:repeat(6,1fr);min-height:auto;row-gap:14px;margin-top:24px}
+    .gal-row.r1{margin-top:36px}
+    .gal-letter{grid-column:1/7 !important;grid-row:auto !important;align-self:start !important;margin-top:0 !important;font-size:clamp(120px,38vw,200px) !important}
+    .gal-row .tag{grid-column:1/7 !important;grid-row:auto !important;justify-self:start !important;text-align:left !important;padding-top:4px !important;max-width:none !important;font-size:9px}
+    .gal-row .tag b{font-size:11px;margin-bottom:6px}
+    .gal-row .tag .caption{font-size:13px;line-height:1.4}
+
+    /* §03 Push/Pull */
+    .pull-mark{grid-column:1/13;font-size:clamp(56px,16vw,108px);margin-bottom:28px;line-height:.92}
+    .pull-col{grid-row:auto !important}
+    .pull-col.push, .pull-col.pull{grid-column:1/13}
+    .pull-col.pull{margin-top:36px}
+    .pull-col h3{font-size:10px;margin:0 0 18px}
+    .pull-col li{font-size:15px;padding:13px 0;line-height:1.4}
+    .pull[data-balance="push"] .pull-col li,
+    .pull[data-balance="pull"] .pull-col li{transform:none}
+    .pull[data-balance="push"] .ebr,
+    .pull[data-balance="pull"] .ebr{transform:none}
+
+    /* §04 Final question */
+    .q-mark{grid-column:1/13;font-size:clamp(26px,7.4vw,42px);max-width:none;line-height:1.12}
+    .q-aside{grid-column:1/13;text-align:left;margin-top:20px;font-size:10px;line-height:1.6}
+
+    /* §05 Stanza */
+    .stanza-img{grid-column:1/13;grid-row:2;aspect-ratio:4/3;max-height:46vh}
+    .stanza-text{grid-column:1/13;grid-row:3;margin-top:24px;font-size:clamp(20px,5.6vw,28px);line-height:1.22}
+    .stanza-sig{grid-column:1/13;grid-row:4;margin-top:18px;padding-top:12px;font-size:9px;letter-spacing:.18em;flex-wrap:wrap;gap:8px}
+
+    /* §06 Output */
+    .out-mark{grid-column:1/13;font-size:clamp(72px,22vw,140px);line-height:.88}
+    .out-aside{grid-column:1/13;margin-top:24px;font-size:13.5px;max-width:none}
+    .out-cta{grid-column:1/13;margin-top:28px;flex-direction:column;align-items:flex-start;gap:14px;padding-top:16px}
+    .out-cta a{font-size:clamp(28px,8vw,46px)}
+
+    /* Colophon */
+    .coda{grid-template-columns:1fr;gap:20px}
+    .coda p{font-size:12px;line-height:1.5}
+  }
+
+  /* Very narrow phones */
+  @media (max-width:380px){
+    .hero-title{font-size:clamp(18px, 7.8vw, 28px);letter-spacing:.4em}
+    .calib-quote{font-size:clamp(34px, 11vw, 52px)}
+    .gal-letter{font-size:clamp(110px, 38vw, 160px) !important}
+    .pull-mark{font-size:clamp(46px,14vw,76px)}
+    .q-mark{font-size:clamp(24px, 7.4vw, 36px)}
+    .stanza-text{font-size:clamp(18px,5.4vw,24px)}
+    .out-mark{font-size:clamp(60px,20vw,108px)}
+    .out-cta a{font-size:clamp(24px,7.5vw,36px)}
+  }
+
+  /* Touch — kill sticky :hover states */
+  @media (hover:none){
+    .pull-col li:hover,
+    .out-cta a:hover{color:var(--ink) !important;background:transparent !important}
+  }
+</style>
+
+<style id="gate-styles">
+  /* Qualification gate */
+  body.gate-locked{overflow:hidden;height:100vh}
+  body.gate-locked > *:not(#qgate){visibility:hidden}
+
+  #qgate{position:fixed;inset:0;z-index:2147483646;background:var(--bone,#0a0908);color:var(--ink,#d8d0c0);font-family:var(--body,"Inter",sans-serif);display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;overflow:hidden}
+  #qgate.fade-out{animation:gate-fadeout 700ms ease-out forwards}
+  @keyframes gate-fadeout{to{opacity:0;visibility:hidden;pointer-events:none}}
+
+  /* grit overlay reusing brand pattern */
+  #qgate::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:.30;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.6' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size:220px 220px;animation:qgate-grit 1.4s steps(4,end) infinite;z-index:1}
+  @keyframes qgate-grit{0%{background-position:0 0}25%{background-position:33px -22px}50%{background-position:-18px 41px}75%{background-position:56px 12px}100%{background-position:0 0}}
+  #qgate::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+    radial-gradient(ellipse 70% 55% at 50% 50%, rgba(0,0,0,.25) 0%, rgba(0,0,0,.55) 70%, rgba(0,0,0,.85) 100%);z-index:1}
+
+  #qgate .qg-top{position:relative;z-index:3;display:flex;justify-content:space-between;align-items:flex-start;padding:32px 36px;font-family:var(--mono,"JetBrains Mono",monospace);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim,#7a766e)}
+  #qgate .qg-top b{color:var(--ink);font-weight:500;display:block;margin-top:4px}
+  #qgate .qg-top .arr{color:var(--red,#f02d14);margin-left:6px}
+  #qgate .qg-progress{display:flex;gap:6px;align-items:center}
+  #qgate .qg-progress .led{width:14px;height:7px;background:rgba(216,208,192,.15);transition:background .25s linear}
+  #qgate .qg-progress .led.on{background:var(--ink)}
+  #qgate .qg-progress .led.live{background:var(--red);box-shadow:0 0 6px rgba(240,45,20,.6)}
+
+  #qgate .qg-stage{position:relative;z-index:3;flex:1;display:grid;align-content:center;padding:0 clamp(28px, 6vw, 96px);max-width:1280px;margin:0 auto;width:100%}
+  #qgate .qg-num{font-family:var(--mono);font-size:11px;letter-spacing:.30em;text-transform:uppercase;color:var(--red);margin:0 0 28px}
+  #qgate .qg-q{font-family:var(--hero,"Anton",sans-serif);font-weight:400;font-size:clamp(36px, 6.4vw, 92px);line-height:.96;letter-spacing:-.012em;text-transform:uppercase;color:var(--ink);margin:0 0 48px;max-width:22ch;text-wrap:balance}
+  #qgate .qg-q .em{color:var(--red);font-style:normal}
+  #qgate .qg-options{display:grid;gap:14px;max-width:760px}
+  #qgate .qg-opt{appearance:none;background:transparent;border:1px solid rgba(216,208,192,.22);color:var(--ink);font-family:var(--body);font-weight:300;font-size:clamp(16px, 1.4vw, 19px);text-align:left;padding:18px 22px;cursor:pointer;transition:background .15s linear, border-color .15s linear, color .15s linear, transform .12s linear;letter-spacing:0;line-height:1.4;display:grid;grid-template-columns:54px 1fr;gap:14px;align-items:center}
+  #qgate .qg-opt .k{font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+  #qgate .qg-opt:hover{background:rgba(216,208,192,.06);border-color:rgba(216,208,192,.55)}
+  #qgate .qg-opt:hover .k{color:var(--red)}
+  #qgate .qg-opt:active{transform:translateY(1px)}
+  #qgate .qg-opt.selected{background:rgba(216,208,192,.10);border-color:var(--ink);color:var(--ink)}
+  #qgate .qg-opt.selected .k{color:var(--red)}
+
+  #qgate .qg-bot{position:relative;z-index:3;display:flex;justify-content:space-between;align-items:flex-end;padding:28px 36px 36px;font-family:var(--mono);font-size:10px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-dim)}
+  #qgate .qg-bot .arr{color:var(--red);margin-left:6px}
+
+  /* ===== Block-out (hard gate end screen) ===== */
+  #qgate .qg-block{display:none}
+  #qgate[data-state="blocked"] .qg-stage{display:none}
+  #qgate[data-state="blocked"] .qg-pass{display:none}
+  #qgate[data-state="blocked"] .qg-block{display:grid;align-content:center;justify-items:start;padding:0 clamp(28px, 6vw, 96px);max-width:1280px;margin:0 auto;width:100%;flex:1;position:relative;z-index:3}
+
+  /* ===== Qualified / pass stage ===== */
+  #qgate .qg-pass{display:none}
+  #qgate[data-state="passing"] .qg-stage,
+  #qgate[data-state="qualified"] .qg-stage{display:none}
+  #qgate[data-state="passing"] .qg-pass,
+  #qgate[data-state="qualified"] .qg-pass{display:grid;align-content:center;justify-items:start;padding:0 clamp(28px, 6vw, 96px);max-width:1280px;margin:0 auto;width:100%;flex:1;position:relative;z-index:3}
+  #qgate .qg-pass h2{font-family:var(--hero);font-weight:400;font-size:clamp(48px, 8vw, 120px);line-height:.96;letter-spacing:-.012em;text-transform:uppercase;color:var(--ink);margin:0 0 40px;text-wrap:balance}
+  #qgate .qg-pass h2 .em{color:var(--red)}
+  #qgate .qg-pass-list{display:grid;gap:6px;font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink);margin-bottom:36px;min-width:min(420px, 80vw)}
+  #qgate .qg-pass-list .row{display:grid;grid-template-columns:140px 1fr 80px;column-gap:18px;align-items:baseline}
+  #qgate .qg-pass-list .lbl{color:var(--ink-dim)}
+  #qgate .qg-pass-list .stamp{color:var(--red);text-align:right}
+  #qgate .qg-bar-wrap{width:min(560px, 80vw)}
+  #qgate .qg-bar{display:block;height:3px;background:rgba(216,208,192,.10);overflow:hidden;border:1px solid var(--rule)}
+  #qgate .qg-bar i{display:block;height:100%;background:var(--ink);width:0%;transition:width .12s linear}
+  #qgate .qg-bar i.red{background:var(--red);box-shadow:0 0 6px rgba(240,45,20,.5)}
+  #qgate .qg-bar-meta{display:flex;justify-content:space-between;margin-top:10px;font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-dim)}
+  #qgate .qg-bar-meta b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+  #qgate .qg-bar-meta b.red{color:var(--red)}
+  #qgate .qg-cta{margin-top:40px;font-family:var(--mono);font-size:11px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-dim);min-height:18px;display:inline-flex;align-items:baseline;gap:8px}
+  #qgate .qg-cta.ready{font-family:var(--hero);font-size:clamp(32px, 4.4vw, 64px);letter-spacing:0;text-transform:uppercase;color:var(--ink);cursor:pointer;border-bottom:3px solid var(--red);padding:0 2px 4px;line-height:1;transition:color .15s linear}
+  #qgate .qg-cta.ready .arr{color:var(--red);margin-left:14px;font-size:.7em;display:inline-block;transition:transform .12s linear}
+  #qgate .qg-cta.ready:hover{color:var(--red)}
+  #qgate .qg-cta.ready:hover .arr{transform:translateX(6px)}
+  #qgate .qg-block .qg-num{margin-bottom:28px}
+  #qgate .qg-block h2{font-family:var(--hero);font-weight:400;font-size:clamp(40px, 7vw, 96px);line-height:.96;letter-spacing:-.012em;text-transform:uppercase;color:var(--ink);margin:0 0 32px;max-width:22ch}
+  #qgate .qg-block h2 .em{color:var(--red)}
+  #qgate .qg-block p{margin:0 0 24px;font-size:clamp(16px, 1.4vw, 19px);line-height:1.55;max-width:46ch;color:var(--ink)}
+  #qgate .qg-block .qg-mail{font-family:var(--hero);font-weight:400;font-size:clamp(28px, 3.6vw, 52px);letter-spacing:0;color:var(--ink);text-decoration:none;border-bottom:2px solid var(--red);padding-bottom:2px;text-transform:lowercase;transition:color .15s linear}
+  #qgate .qg-block .qg-mail:hover{color:var(--red)}
+  #qgate .qg-block .qg-restart{margin-top:36px;appearance:none;background:transparent;border:1px solid rgba(216,208,192,.22);color:var(--ink-dim);font-family:var(--mono);font-size:10px;letter-spacing:.24em;text-transform:uppercase;padding:10px 16px;cursor:pointer;transition:border-color .15s linear,color .15s linear}
+  #qgate .qg-block .qg-restart:hover{border-color:var(--ink);color:var(--ink)}
+
+  @media (max-width:640px){
+    #qgate .qg-top{padding:18px 18px;flex-wrap:wrap;gap:10px;font-size:8.5px}
+    #qgate .qg-top > div{flex:1;min-width:0}
+    #qgate .qg-stage{padding:0 22px}
+    #qgate .qg-q{font-size:clamp(30px,8vw,52px) !important}
+    #qgate .qg-opt{font-size:15px;padding:14px 14px;grid-template-columns:36px 1fr;gap:10px;min-height:56px}
+    #qgate .qg-opt .k{font-size:9px}
+    #qgate .qg-bot{padding:18px 18px 22px;font-size:8.5px;flex-wrap:wrap;gap:10px}
+    #qgate .qg-pass{padding:0 22px}
+    #qgate .qg-pass h2{font-size:clamp(36px,10vw,68px) !important}
+    #qgate .qg-pass-list{font-size:10px;min-width:0;width:100%}
+    #qgate .qg-pass-list .row{grid-template-columns:80px 1fr 60px;column-gap:10px}
+    #qgate .qg-bar-wrap{width:100%}
+    #qgate .qg-cta.ready{font-size:clamp(28px,8vw,48px) !important}
+    #qgate .qg-block{padding:0 22px}
+  }
+</style>
+</head>
+<body data-screen-label="00 Tuner">
+
+<!-- ============ QUALIFICATION GATE ============ -->
+<div id="qgate" data-state="asking" role="dialog" aria-modal="true" aria-label="Qualification">
+  <div class="qg-top">
+    <div>
+      <span>PRESSURE TEST</span>
+      <b>BEFORE ENTRY</b>
+    </div>
+    <div class="qg-progress" aria-hidden="true">
+      <span class="led live" data-led="0"></span>
+      <span class="led" data-led="1"></span>
+      <span class="led" data-led="2"></span>
+    </div>
+    <div style="text-align:right">
+      <span>STEP</span>
+      <b id="qg-step">01 / 03<span class="arr">→</span></b>
+    </div>
+  </div>
+
+  <div class="qg-stage" id="qg-stage">
+    <p class="qg-num" id="qg-num">N° 01</p>
+    <h2 class="qg-q" id="qg-q"></h2>
+    <div class="qg-options" id="qg-options" role="radiogroup"></div>
+  </div>
+
+  <div class="qg-block" id="qg-block">
+    <p class="qg-num">END</p>
+    <h2>We're <span class="em">probably not</span> it.</h2>
+    <p>DISTO works with brands where momentum, not size, is the constraint. If your situation changes, the door stays here. You can always send us message. We might reply.</p>
+    <a class="qg-mail" href="mailto:info@disto.ag">info@disto.ag</a>
+    <button class="qg-restart" id="qg-restart" type="button">Start over ←</button>
+  </div>
+
+  <div class="qg-pass" id="qg-pass">
+    <p class="qg-num">SIGNAL LOCK</p>
+    <h2>You are <span class="em">qualified</span>.</h2>
+
+    <div class="qg-pass-list" aria-hidden="true">
+      <div class="row"><span class="lbl">Posture</span><span>Brand with momentum</span><span class="stamp">pass</span></div>
+      <div class="row"><span class="lbl">Frame</span><span>Strategic lever</span><span class="stamp">pass</span></div>
+      <div class="row"><span class="lbl">Constraint</span><span>Brand · signal</span><span class="stamp">pass</span></div>
+    </div>
+
+    <div class="qg-bar-wrap">
+      <span class="qg-bar"><i id="qg-bar-i"></i></span>
+      <div class="qg-bar-meta">
+        <span><b id="qg-status">CALIBRATING…</b></span>
+        <span><b class="red" id="qg-pct">00%</b></span>
+      </div>
+    </div>
+
+    <span class="qg-cta" id="qg-enter">— STAND BY —</span>
+  </div>
+
+  <div class="qg-bot">
+    <span>DISTO · MMXXVI</span>
+    <span>QUALIFIED ONLY→</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  const KEY = 'disto-qgate-ts';
+  const TTL_MS = 10 * 60 * 1000; // 10 minutes
+  const root = document.getElementById('qgate');
+  if (!root) return;
+
+  try { localStorage.removeItem(KEY); } catch(e){}
+  // Skip gate if user passed within the last 10 minutes
+  try {
+    const ts = parseInt(localStorage.getItem(KEY) || '0', 10);
+    if (ts && (Date.now() - ts) < TTL_MS) { root.remove(); return; }
+  } catch(e){}
+
+  document.body.classList.add('gate-locked');
+
+  const QUESTIONS = [
+    {
+      q: "What brings <span class='em'>you</span> here?",
+      opts: [
+        {k:'A', t:"I have a brand that's moving and needs sharpening.", pass:true},
+        {k:'B', t:"I'm shopping for an agency.",                        pass:false},
+        {k:'C', t:"I'm here to look.",                                  pass:false},
+      ]
+    },
+    {
+      q: "How do you treat <span class='em'>brand</span>?",
+      opts: [
+        {k:'A', t:"As a strategic lever.",            pass:true},
+        {k:'B', t:"As a coat of paint.",              pass:false},
+        {k:'C', t:"I'm not sure yet.",                pass:false},
+      ]
+    },
+    {
+      q: "Where is the <span class='em'>constraint</span>?",
+      opts: [
+        {k:'A', t:"Brand. The signal no longer reflects the ambition.",   pass:true},
+        {k:'B', t:"Execution. We just need more output.",                 pass:false},
+        {k:'C', t:"Not sure — we want help figuring it out.",            pass:false},
+      ]
+    },
+  ];
+
+  const qNumEl = document.getElementById('qg-num');
+  const qTextEl = document.getElementById('qg-q');
+  const qOptsEl = document.getElementById('qg-options');
+  const stepEl = document.getElementById('qg-step');
+  const leds = root.querySelectorAll('.qg-progress .led');
+
+  let idx = 0;
+
+  function render(){
+    const Q = QUESTIONS[idx];
+    qNumEl.textContent = 'N° ' + String(idx+1).padStart(2,'0');
+    qTextEl.innerHTML = Q.q;
+    stepEl.innerHTML = String(idx+1).padStart(2,'0') + ' / 03<span class="arr">→</span>';
+    // leds
+    leds.forEach((l, i) => {
+      l.classList.remove('on','live');
+      if (i < idx) l.classList.add('on');
+      else if (i === idx) l.classList.add('live');
+    });
+    // options — shuffled so pass-answer isn't always first
+    qOptsEl.innerHTML = '';
+    const shuffled = Q.opts.slice().sort(() => Math.random() - 0.5);
+    const keys = ['A', 'B', 'C', 'D'];
+    shuffled.forEach((o, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'qg-opt';
+      b.setAttribute('role','radio');
+      b.innerHTML = '<span class="k">'+keys[i]+'</span><span>'+o.t+'</span>';
+      b.addEventListener('click', () => choose(b, o));
+      qOptsEl.appendChild(b);
+    });
+  }
+
+  function choose(btn, opt){
+    [...qOptsEl.children].forEach(c => c.classList.remove('selected'));
+    btn.classList.add('selected');
+    // ensure audio + pedal sample are warming up on first click
+    if (window.__distoStartAmbient){ /* primes audioCtx + loads buffers */ }
+    if (opt.pass && window.__distoPedalClick) window.__distoPedalClick();
+    setTimeout(() => {
+      if (!opt.pass) {
+        block();
+        return;
+      }
+      idx++;
+      if (idx >= QUESTIONS.length) {
+        pass();
+        return;
+      }
+      // fade-in next
+      qTextEl.style.opacity = '0';
+      qOptsEl.style.opacity = '0';
+      setTimeout(() => {
+        render();
+        requestAnimationFrame(() => {
+          qTextEl.style.transition = 'opacity .35s linear';
+          qOptsEl.style.transition = 'opacity .35s linear';
+          qTextEl.style.opacity = '1';
+          qOptsEl.style.opacity = '1';
+        });
+      }, 220);
+    }, 320);
+  }
+
+  function block(){
+    root.setAttribute('data-state', 'blocked');
+    leds.forEach(l => l.classList.remove('live','on'));
+  }
+
+  function pass(){
+    // light all LEDs and switch to pass stage
+    leds.forEach(l => { l.classList.remove('live'); l.classList.add('on'); });
+    stepEl.innerHTML = '03 / 03<span class="arr">→</span>';
+    root.setAttribute('data-state', 'passing');
+
+    const bar = document.getElementById('qg-bar-i');
+    const pct = document.getElementById('qg-pct');
+    const status = document.getElementById('qg-status');
+    const enter = document.getElementById('qg-enter');
+    bar.style.width = '0%';
+    bar.classList.remove('red');
+    pct.textContent = '00%';
+    status.textContent = 'CALIBRATING…';
+    enter.textContent = '— STAND BY —';
+    enter.classList.remove('ready');
+
+    const targetDur = 2800;
+    const start = performance.now();
+    function tick(now){
+      const t = (now - start) / targetDur;
+      const p = Math.min(1, t);
+      const eased = 1 - Math.pow(1 - p, 2.2);
+      const display = Math.floor(eased * 100);
+      bar.style.width = display + '%';
+      pct.textContent = String(display).padStart(2,'0') + '%';
+      if (display < 35) status.textContent = 'CALIBRATING…';
+      else if (display < 75) status.textContent = 'TUNING SIGNAL…';
+      else if (display < 100) status.textContent = 'OPENING CHANNEL…';
+      else { status.textContent = 'SIGNAL LOCK'; bar.classList.add('red'); }
+      if (p < 1) requestAnimationFrame(tick);
+      else {
+        enter.innerHTML = 'Enter <span class="arr">→</span>';
+        enter.classList.add('ready');
+        root.setAttribute('data-state', 'qualified');
+        enter.addEventListener('click', commit, {once:true});
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function commit(){
+    try { localStorage.setItem(KEY, String(Date.now())); } catch(e){}
+    root.classList.add('fade-out');
+    document.body.classList.remove('gate-locked');
+    setTimeout(() => root.remove(), 720);
+    if (window.__distoStartAmbient) window.__distoStartAmbient();
+    if (window.__distoEnterGlitch) window.__distoEnterGlitch();
+  }
+
+  document.getElementById('qg-restart').addEventListener('click', () => {
+    root.setAttribute('data-state', 'asking');
+    idx = 0;
+    render();
+  });
+
+  render();
+})();
+</script>
+
+<div class="grain"></div>
+
+<!-- Side rails -->
+<aside class="vside l" aria-hidden="true">DISTO · MMXXVI · QC · CANADA &nbsp; <span class="red">●</span></aside>
+<aside class="vside r" aria-hidden="true">CALIBRATE &nbsp;<span class="red">·</span>&nbsp; CUT THROUGH</aside>
+
+<!-- ============ TOP STRIP ============ -->
+<header class="strip top">
+  <a href="#" id="logo-home" aria-label="Restart calibration" style="display:inline-flex;align-items:center;text-decoration:none;cursor:pointer"><img class="brand-logo" src="assets/DISTO-Logo-RED.png" alt="DISTO"></a>
+  <div class="meta">
+    <span><span class="dot"></span><b>LIVE</b></span>
+    <span id="now-stamp">— · —</span>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero" data-screen-label="01 Hero">
+  <canvas class="hero-surface" id="hero-surface"></canvas>
+  <span class="hero-frag" data-frag="0"><img src="assets/DISTO-Logo-OWHT.png" alt=""></span>
+  <span class="hero-frag" data-frag="1"><img src="assets/DISTO-Logo-OWHT.png" alt=""></span>
+  <span class="hero-frag" data-frag="2"><img src="assets/DISTO-Logo-OWHT.png" alt=""></span>
+  <span class="hero-frag" data-frag="3"><img src="assets/DISTO-Logo-OWHT.png" alt=""></span>
+  <span class="hero-frag" data-frag="4"><img src="assets/DISTO-Logo-OWHT.png" alt=""></span>
+  <div class="hero-defocus"></div>
+  <div class="hero-grit"></div>
+  <div class="hero-overlay">
+    <div class="hero-top">
+      <div class="l">
+        <span class="dim">MANUAL</span>
+        <b>№ 00</b>
+      </div>
+      <div class="r">
+        <span class="dim">STAND BY</span>
+        <b>TUNER</b>
+      </div>
+    </div>
+    <div class="hero-center">
+      <h1 class="hero-title">CUT&nbsp;&nbsp;THRU</h1>
+    </div>
+    <div class="hero-foot">
+      <span>SIDE A</span>
+      <span class="scrolldown"><span class="arr">↓</span></span>
+      <span>TAKE 01</span>
+    </div>
+  </div>
+</section>
+
+<main class="page">
+
+  <!-- ============ § 01 CALIBRATION ============ -->
+  <section class="calib" data-screen-label="02 Calibration">
+    <div class="ebr">
+      <div class="l"><span class="num">№ 01</span><span>CALIBRATION</span></div>
+      <div class="r tuner" id="tuner" aria-hidden="true">
+        <div class="tuner-leds" id="tuner-leds">
+          <span class="led"></span>
+          <span class="led"></span>
+          <span class="led center"></span>
+          <span class="led"></span>
+          <span class="led"></span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="calib-quote reveal" style="--d:0ms">
+      <span class="break"><span class="em">This is not</span></span>
+      <span class="break">an introduction.</span>
+    </h2>
+
+    <aside class="calib-aside reveal" style="--d:120ms" aria-hidden="true">THIS PAGE
+TELLS THE RIGHT PEOPLE
+THEY ARE HOME.
+EVERYONE ELSE
+TO KEEP MOVING.</aside>
+
+    <div class="calib-body reveal" style="--d:240ms">
+      <p lang="en">DISTO exists to protect and amplify a brand's signal. We take what matters and push it past neutral, until it becomes unmistakable.</p>
+      <p lang="en">Distortion is not noise. It's controlled tone applied in service of distinction. Tighter positioning, faster decisions, deeper memory.</p>
+    </div>
+  </section>
+
+  <!-- ============ § 02 SIGNAL GALLERY ============ -->
+  <section class="gallery" data-screen-label="03 Signal">
+
+    <div class="ebr">
+      <div class="l"><span class="num">№ 02</span><span>SIGNAL</span></div>
+      <div class="r">CHAIN<br><b>PATH TO RESONANCE<span class="arr">→</span></b></div>
+    </div>
+
+    <div class="gal-row r1 noisy">
+      <div class="tag"><span class="num">[01]</span><b>SINGLE</b><span class="caption">One thing worth protecting.</span></div>
+      <h2 class="gal-letter">S</h2>
+      <image-slot id="gal-1" class="gal-img" placeholder="Image 01 — clean / before"></image-slot>
+    </div>
+
+    <div class="gal-row r2 noisy">
+      <div class="tag"><span class="num">[02]</span><b>INTENT</b><span class="caption">Earned, not requested.</span></div>
+      <image-slot id="gal-2" class="gal-img" placeholder="Image 02 — close-up object"></image-slot>
+      <h2 class="gal-letter">I</h2>
+    </div>
+
+    <div class="gal-row r3 noisy">
+      <div class="tag"><span class="num">[03]</span><b>GAIN</b><span class="caption">Past neutral, into unmistakable.</span></div>
+      <h2 class="gal-letter">G</h2>
+      <image-slot id="gal-3" class="gal-img" placeholder="Image 03 — texture / detail"></image-slot>
+    </div>
+
+    <div class="gal-row r4 noisy">
+      <div class="tag"><span class="num">[04]</span><b>NERVE</b><span class="caption">Productive tension before relief.</span></div>
+      <image-slot id="gal-4" class="gal-img" placeholder="Image 04 — figure / silhouette"></image-slot>
+      <h2 class="gal-letter">N</h2>
+    </div>
+
+    <div class="gal-row r5 noisy">
+      <div class="tag"><span class="num">[05]</span><b>ARC</b><span class="caption">Transformation throughout a story.</span></div>
+      <h2 class="gal-letter">A</h2>
+      <image-slot id="gal-5" class="gal-img" placeholder="Image 05 — wide / negative space"></image-slot>
+    </div>
+
+    <div class="gal-row r6 noisy">
+      <div class="tag"><span class="num">[06]</span><b>LANDING</b><span class="caption">Discovered evidence.</span></div>
+      <image-slot id="gal-6" class="gal-img" placeholder="Image 06 — closing image"></image-slot>
+      <h2 class="gal-letter">L<span class="red-dot"></span></h2>
+    </div>
+
+  </section>
+
+  <!-- ============ § 03 PUSH / PULL ============ -->
+  <section class="pull" data-screen-label="04 Push Pull" id="pull-section" data-balance="">
+    <div class="ebr">
+      <div class="l"><span class="num">№ 03</span><span>DECISIONS</span></div>
+      <div class="r">CRITERIA<br><b>FRAMEWORK<span class="arr">→</span></b></div>
+    </div>
+
+    <h2 class="pull-mark">Push<span class="slash">/</span>Pull.</h2>
+
+    <div class="pull-col push" data-side="push">
+      <h3>WE PUSH<span>WHEN —</span></h3>
+      <ul>
+        <li lang="en">It makes the brand memorable.</li>
+        <li lang="en">It clarifies position through contrast.</li>
+        <li lang="en">It creates emotion aligned with ambition.</li>
+        <li lang="en">It forces sharper decisions, in and out.</li>
+      </ul>
+    </div>
+
+    <div class="pull-col pull" data-side="pull">
+      <h3>WE PULL BACK<span>WHEN —</span></h3>
+      <ul>
+        <li lang="en">It serves novelty more than taste.</li>
+        <li lang="en">It flatters ego over the work.</li>
+        <li lang="en">It requires excessive explanation.</li>
+        <li lang="en">It trades long-term equity for noise.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ § 04 FINAL QUESTION ============ -->
+  <section class="question" data-screen-label="05 Final Question">
+    <div class="ebr">
+      <div class="l"><span class="num">№ 04</span><span>FINAL QUESTION</span></div>
+      <div class="r">OVERRIDES ALL OTHERS<br><b>NON NEGOTIABLE→</b></div>
+    </div>
+
+    <h2 class="q-mark">
+      Does this make the brand
+      <span class="em" data-i="0">sharper</span>,
+      <span class="em" data-i="1">stronger</span>,
+      <span class="em" data-i="2">more memorable</span>
+      under real-world pressure?
+    </h2>
+
+    <aside class="q-aside">
+      <b>IF YES —</b>
+      We commit fully.<br><br>
+      <b>IF NO —</b>
+      We refine, or walk.
+    </aside>
+  </section>
+
+  <!-- ============ § 05 STANZA ============ -->
+  <section class="stanza" data-screen-label="06 Stanza">
+    <div class="ebr">
+      <div class="l">
+        <span class="num">№ 05</span>
+        <span>STANZA</span>
+        <span class="play-led" id="stanza-play-led" aria-hidden="true"><span class="dot"></span><span id="stanza-play-label">SIGNAL READY</span></span>
+      </div>
+      <div class="r">RECORD<br><b>NO COMP<span class="arr">→</span></b></div>
+    </div>
+
+    <div class="stanza-img" id="stanza-img">
+      <canvas class="stanza-noise" id="stanza-noise"></canvas>
+      <div class="stanza-tag" id="stanza-tag">TAPE A · 00:00<br><b>STAND BY</b></div>
+      <div class="stanza-vu"><i id="stanza-vu-fill"></i></div>
+      <div class="stanza-play-hint" id="stanza-play-hint">
+        <div style="display:grid;place-items:center">
+          <span class="icon">▶</span>
+          <span>PRESS / SCROLL TO PLAY</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="stanza-text">
+      <span class="v">From a clean signal we push</span>
+      <span class="v">until ideas are <span class="em">bound to crush</span></span>
+      <span class="v">neutral into memorable.</span>
+      <span class="br"></span>
+      <span class="v">With simple controls we shape</span>
+      <span class="v">the noise they chase, and make</span>
+      <span class="v">a defiance <span class="em">born from silence</span>.</span>
+      <span class="br"></span>
+      <span class="v">Despite the strain</span>
+      <span class="v">we are here to sustain</span>
+      <span class="v">brands running <span class="em">against the grain</span>.</span>
+    </p>
+
+    <div class="stanza-sig">
+      <span>— DISTO · MMXXVI+</span>
+      <span class="red">CUT THROUGH.</span>
+    </div>
+  </section>
+
+  <!-- ============ COLOPHON ============ -->
+  <section class="coda" data-screen-label="08 Colophon">
+    <div>
+      <span class="label">CORRESPONDENCE</span>
+      <p>info@disto.ag — read once weekly.</p>
+    </div>
+    <div>
+      <span class="label">COLOPHON</span>
+      <p>This page is the entire site. Set in Anton, Space Grotesk &amp; JetBrains Mono.<br>Press 00 · QC · CANADA.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ BOTTOM STRIP ============ -->
+<footer class="strip bottom">
+  <span>MMXXVI</span>
+  <div class="meta">
+    <span><a href="mailto:info@disto.ag" style="color:inherit;text-decoration:none;border-bottom:1px solid currentColor">info@disto.ag</a></span>
+  </div>
+  <img class="brand-logo" src="assets/DISTO-Logo-OWHT.png" alt="DISTO">
+</footer>
+
+<script src="image-slot.js"></script>
+<script>
+/* ============ Hero VHS texture ============ */
+(function(){
+  const c = document.getElementById('hero-surface');
+  if (!c) return;
+  const hero = c.parentElement;
+  const fragNodes = document.querySelectorAll('.hero-frag');
+  if (!fragNodes.length) return;
+
+  const LOW_W = 48, LOW_H = 27;
+  c.width = LOW_W; c.height = LOW_H;
+  const ctx = c.getContext('2d');
+
+  // cursor state (canvas-space)
+  const cursor = {cy: -1, lastMove: 0, inside: false};
+  hero.addEventListener('mousemove', (e) => {
+    const r = hero.getBoundingClientRect();
+    cursor.cy = ((e.clientY - r.top) / r.height) * LOW_H;
+    cursor.lastMove = performance.now();
+    cursor.inside = true;
+  });
+  hero.addEventListener('mouseleave', () => { cursor.inside = false; });
+
+  // 5 letter slices of the DISTO. wordmark
+  const fragments = [
+    {range:[0,    17],  base:0.008},
+    {range:[19,   26],  base:0.008},
+    {range:[28,   45],  base:0.008},
+    {range:[47,   63],  base:0.008},
+    {range:[65,   100], base:0.012},
+  ];
+  const scale = 3.4;
+
+  const state = fragments.map(() => ({
+    x: -10 + Math.random()*120,
+    y: -10 + Math.random()*120,
+    rot: (Math.random()-0.5)*18,
+    op: 0,
+    phase: 'hidden',
+    phaseAt: performance.now(),
+    nextSwapAt: performance.now() + 400 + Math.random()*1600,
+    holdFor: 1800,
+  }));
+
+  let holdEvent = null;
+  let nextHoldAt = performance.now() + 28000 + Math.random()*36000;
+
+  function frame(){
+    const t = performance.now()/1000;
+    const now = performance.now();
+    const W = LOW_W, H = LOW_H;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,W,H);
+
+    // 3 ultra-faint bands drifting
+    for (let i=0;i<3;i++){
+      const phase = t*0.010 + i*0.83;
+      const y = ((Math.sin(phase) * 0.5 + 0.5) * H * 1.3 - H*0.15) | 0;
+      const h = 1 + (Math.sin(phase*1.3 + i) * 0.5 + 0.5) * 3;
+      const a = 0.012 + Math.random()*0.014;
+      ctx.fillStyle = 'rgba(255,255,255,'+a+')';
+      ctx.fillRect(0, y, W, h);
+    }
+
+    // sparse dropout dashes
+    for (let i=0;i<2;i++){
+      if (Math.random() < 0.04){
+        const y = Math.floor(Math.random()*H);
+        const x = Math.floor(Math.random()*W);
+        const len = 2 + Math.floor(Math.random()*8);
+        ctx.fillStyle = 'rgba(255,255,255,'+(0.018+Math.random()*0.024)+')';
+        ctx.fillRect(x, y, len, 1);
+      }
+    }
+
+    // noise — mostly invisible
+    for (let i=0;i<70;i++){
+      const v = Math.random();
+      const a = Math.random()*0.06;
+      if (v < 0.90) ctx.fillStyle = 'rgba(0,0,0,'+(a*1.6)+')';
+      else ctx.fillStyle = 'rgba(255,255,255,'+(a*0.35)+')';
+      ctx.fillRect(Math.random()*W | 0, Math.random()*H | 0, 1, 1);
+    }
+
+    // sync line barely there
+    const lineY = ((Math.sin(t*0.05) * 0.5 + 0.5) * H) | 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.022)';
+    ctx.fillRect(0, lineY, W, 1);
+
+    // rare hold tear
+    if (!holdEvent && now > nextHoldAt){
+      holdEvent = {until: now + 420 + Math.random()*340, y: Math.random()*H, h: 2 + Math.random()*6};
+      nextHoldAt = now + 28000 + Math.random()*36000;
+    }
+    if (holdEvent){
+      if (now < holdEvent.until){
+        ctx.fillStyle = 'rgba(255,255,255,0.035)';
+        ctx.fillRect(0, holdEvent.y, W, holdEvent.h);
+      } else { holdEvent = null; }
+    }
+
+    // interactive cursor slice — bright horizontal tape-tear at cursor Y
+    const sinceMove = now - cursor.lastMove;
+    if (cursor.inside && sinceMove < 240){
+      const decay = Math.max(0, 1 - sinceMove/240);
+      const cy = Math.max(0, Math.min(H-1, cursor.cy | 0));
+      // bright primary slice
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.95 * decay) + ')';
+      ctx.fillRect(0, cy, W, 1);
+      // softer halo above and below
+      if (cy > 0)   { ctx.fillStyle = 'rgba(255,255,255,' + (0.40 * decay) + ')'; ctx.fillRect(0, cy-1, W, 1); }
+      if (cy < H-1) { ctx.fillStyle = 'rgba(255,255,255,' + (0.40 * decay) + ')'; ctx.fillRect(0, cy+1, W, 1); }
+      // jittered fragment below — tape tear feel
+      if (Math.random() < 0.5){
+        const off = Math.floor((Math.random()-0.5) * 12);
+        const sliceY = cy + (Math.random()<0.5 ? -1 : 2);
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.55 * decay) + ')';
+        ctx.fillRect(off, Math.max(0, Math.min(H-1, sliceY)), W, 1);
+      }
+    }
+    // persistent dim cursor line (always visible while inside)
+    if (cursor.inside){
+      const cy2 = Math.max(0, Math.min(H-1, cursor.cy | 0));
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillRect(0, cy2, W, 1);
+    }
+
+    // letter fragments lifecycle
+    fragments.forEach((f, i) => {
+      const node = fragNodes[i];
+      const s = state[i];
+      if (!node) return;
+      const dt = now - s.phaseAt;
+
+      if (s.phase === 'hidden'){
+        if (now > s.nextSwapAt){
+          s.x = -14 + Math.random()*124;
+          s.y = -12 + Math.random()*124;
+          s.rot = (Math.random()-0.5)*18;
+          s.phase = 'appearing';
+          s.phaseAt = now;
+        }
+        s.op = 0;
+      } else if (s.phase === 'appearing'){
+        const p = Math.min(1, dt/900);
+        s.op = f.base * p;
+        if (p >= 1){ s.phase = 'visible'; s.phaseAt = now; s.holdFor = 1800 + Math.random()*3200; }
+      } else if (s.phase === 'visible'){
+        s.op = f.base + Math.sin(t*0.6 + i)*0.02;
+        if (dt > s.holdFor){ s.phase = 'disappearing'; s.phaseAt = now; }
+      } else if (s.phase === 'disappearing'){
+        const p = Math.min(1, dt/1100);
+        s.op = f.base * (1-p);
+        if (p >= 1){
+          s.phase = 'hidden';
+          s.phaseAt = now;
+          s.nextSwapAt = now + 100 + Math.random()*900;
+        }
+      }
+
+      const [a, b] = f.range;
+      const clip = 'inset(0 '+(100-b)+'% 0 '+a+'%)';
+      const driftX = Math.sin(t*0.15 + i*1.7) * 1.4;
+      const driftY = Math.cos(t*0.12 + i*2.3) * 1.0;
+      const tx = 'calc('+s.x+'vw + '+driftX.toFixed(1)+'px - '+(a*60/100)+'vw)';
+      const ty = 'calc('+s.y+'vh + '+driftY.toFixed(1)+'px)';
+      node.style.transform = 'translate('+tx+', '+ty+') rotate('+s.rot.toFixed(2)+'deg) scale('+scale+')';
+      node.style.opacity = s.op.toFixed(3);
+      node.style.clipPath = clip;
+      node.style.webkitClipPath = clip;
+    });
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+/* ============ §04 Final Question — breathing red words ============ */
+(function(){
+  const ems = document.querySelectorAll('.q-mark .em');
+  if (!ems.length) return;
+  const configs = [
+    {period:3.7, phase:0.0, scaleAmp:0.012, opAmp:0.10},
+    {period:5.3, phase:1.4, scaleAmp:0.014, opAmp:0.10},
+    {period:4.5, phase:2.9, scaleAmp:0.010, opAmp:0.10},
+  ];
+  function tick(now){
+    const t = now / 1000;
+    ems.forEach((el, i) => {
+      const c = configs[i] || configs[0];
+      const wave = Math.sin((t / c.period) * Math.PI * 2 + c.phase);
+      el.style.transform = 'scale(' + (1 + wave * c.scaleAmp).toFixed(4) + ')';
+      el.style.opacity = (0.88 + wave * c.opAmp).toFixed(3);
+    });
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ============ §03 Push/Pull seesaw ============ */
+(function(){
+  const section = document.getElementById('pull-section');
+  if (!section) return;
+  section.querySelectorAll('[data-side]').forEach(col => {
+    col.addEventListener('mouseenter', () => section.dataset.balance = col.dataset.side);
+    col.addEventListener('mouseleave', () => section.dataset.balance = '');
+  });
+})();
+
+/* ============ §02 Gallery rows — tune in from noise on scroll ============ */
+(function(){
+  const rows = document.querySelectorAll('.gal-row');
+  if (!rows.length) return;
+  function tick(){
+    const vMid = window.innerHeight * 0.5;
+    const zone = window.innerHeight * 0.35; // ±35vh tune zone
+    rows.forEach(row => {
+      const r = row.getBoundingClientRect();
+      const mid = r.top + r.height * 0.5;
+      const inZone = Math.abs(mid - vMid) < zone;
+      if (inZone){
+        if (!row.classList.contains('tuned')){ row.classList.remove('noisy'); row.classList.add('tuned'); }
+      } else {
+        if (row.classList.contains('tuned')){ row.classList.remove('tuned'); row.classList.add('noisy'); }
+      }
+    });
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+/* ============ Tuner LED bar — scroll-driven wobble + lock for §01 ============ */
+(function(){
+  const ledsEl = document.getElementById('tuner-leds');
+  if(!ledsEl) return;
+  const section = document.querySelector('.calib');
+  const leds = Array.from(ledsEl.querySelectorAll('.led'));
+  const total = leds.length;
+  const center = Math.floor(total / 2);
+  let locked = false;
+  let hasLockedOnce = false;
+  let lastScroll = window.scrollY;
+  let scrollVel = 0;
+  let lastTs = performance.now();
+
+  window.addEventListener('scroll', () => {
+    const now = performance.now();
+    const dt = Math.max(1, now - lastTs);
+    const dy = window.scrollY - lastScroll;
+    // smoothed velocity in px/ms
+    scrollVel = scrollVel * 0.7 + (dy / dt) * 0.3;
+    lastScroll = window.scrollY;
+    lastTs = now;
+  }, {passive:true});
+
+  function frame(now){
+    // decay velocity when not scrolling
+    if (performance.now() - lastTs > 60) scrollVel *= 0.92;
+
+    let inLock = false;
+    if (section){
+      const r = section.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      const vMid = window.innerHeight / 2;
+      const zone = window.innerHeight * 0.35;
+      inLock = Math.abs(mid - vMid) < zone && Math.abs(scrollVel) < 0.4;
+    }
+
+    let target;
+    if (inLock){
+      target = center;
+    } else {
+      // wobble driven by scroll position + a bit of randomness
+      const s = window.scrollY * 0.012;
+      const wob = Math.sin(s) * 0.6 + Math.sin(s*2.7+1.3) * 0.4 + (Math.random()-0.5) * 0.6;
+      const norm = Math.max(-1, Math.min(1, wob));
+      target = Math.round(center + norm * center);
+    }
+
+    leds.forEach((led, i) => {
+      led.classList.remove('on','flat');
+      const dist = Math.abs(i - target);
+      if (inLock){
+        if (i === center) led.classList.add('on');
+        else if (dist <= 1) led.classList.add('flat');
+      } else {
+        if (dist <= 0) led.classList.add('on');
+        else if (dist <= 1) led.classList.add('flat');
+      }
+    });
+
+    if (section){
+      if (inLock && !locked){
+        locked = true;
+        hasLockedOnce = true;
+        section.classList.add('locked');
+        ledsEl.classList.remove('locked');
+        // re-trigger ring animation
+        void ledsEl.offsetWidth;
+        ledsEl.classList.add('locked');
+      } else if (!inLock && locked){
+        locked = false;
+        ledsEl.classList.remove('locked');
+        // section.classList.remove('locked') — intentionally NOT removed; stays revealed
+      }
+      // reset reveal when user scrolls back near top of page
+      if (hasLockedOnce && window.scrollY < window.innerHeight * 0.4){
+        hasLockedOnce = false;
+        section.classList.remove('locked');
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+/* Now stamp */
+(function(){
+  const $now = document.getElementById('now-stamp');
+  if(!$now) return;
+  function tick(){
+    const nowD = new Date();
+    $now.textContent = nowD.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit',hour12:false}) + ' EST';
+  }
+  tick(); setInterval(tick, 30000);
+})();
+
+/* Logo click — restart qualification gate */
+(function(){
+  const link = document.getElementById('logo-home');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    try { localStorage.removeItem('disto-qgate-ts'); } catch(err){}
+    location.reload();
+  });
+})();
+
+/* ============ §05 Stanza — dark ambient + melodic word reveal ============ */
+(function(){
+  const imgEl = document.getElementById('stanza-img');
+  const stanzaSection = document.querySelector('.stanza');
+  const stanzaText = document.querySelector('.stanza-text');
+  if (!imgEl || !stanzaSection || !stanzaText) return;
+
+  const canvas = document.getElementById('stanza-noise');
+  const ctx = canvas.getContext('2d');
+  const vuFill = document.getElementById('stanza-vu-fill');
+  const playLed = document.getElementById('stanza-play-led');
+  const playLabel = document.getElementById('stanza-play-label');
+  const tag = document.getElementById('stanza-tag');
+  const lines = Array.from(stanzaText.querySelectorAll('.v'));
+  const ems = Array.from(stanzaText.querySelectorAll('.em'));
+
+  const LW = 96, LH = 128;
+  canvas.width = LW; canvas.height = LH;
+
+  lines.forEach(line => {
+    function walk(node){
+      Array.from(node.childNodes).forEach(child => {
+        if (child.nodeType === 3){
+          const parts = child.textContent.split(/(\s+)/);
+          const frag = document.createDocumentFragment();
+          parts.forEach(part => {
+            if (!part) return;
+            if (/^\s+$/.test(part)) frag.appendChild(document.createTextNode(part));
+            else {
+              const s = document.createElement('span');
+              s.className = 'word';
+              s.textContent = part;
+              frag.appendChild(s);
+            }
+          });
+          node.replaceChild(frag, child);
+        } else if (child.nodeType === 1){
+          walk(child);
+        }
+      });
+    }
+    walk(line);
+  });
+
+  const allWords = Array.from(stanzaText.querySelectorAll('.word'));
+  const emFirstWord = ems.map(em => allWords.indexOf(em.querySelector('.word')));
+
+  const BPM = 56;
+  const SPB = 60 / BPM;
+  const TICK = SPB / 4;
+  const BAR_TICKS = 16;
+  const BARS = 8;
+  const TOTAL_TICKS = BARS * BAR_TICKS;
+
+  const WORD_TICKS = [
+    0, 2, 4, 7, 10, 13,           // line 0 (6)
+    18, 20, 22, 25, 27, 29,       // line 1 (6)
+    34, 38, 42,                   // line 2 (3)
+    50, 52, 55, 58, 61,           // line 3 (5)
+    66, 68, 70, 72, 74, 76,       // line 4 (6)
+    82, 84, 87, 89, 91, 93,       // line 5 (6: a defiance born from silence .)
+    98, 100, 103,                 // line 6 (3)
+    106, 108, 110, 112, 114,      // line 7 (5)
+    117, 119, 121, 123, 125, 127, // line 8 (6: brands running against the grain .)
+  ];
+  const tickActions = {};
+  for (let i = 0; i < allWords.length && i < WORD_TICKS.length; i++){
+    const t = WORD_TICKS[i];
+    if (!tickActions[t]) tickActions[t] = [];
+    tickActions[t].push({word:i});
+    const e = emFirstWord.indexOf(i);
+    if (e >= 0) tickActions[t].push({em:e});
+  }
+
+  function isKick(t){    return t === 0; }
+  function isHat(t){     return t === 8; }
+  function isSubBass(t){ return t === 0; }
+  const DRONE = [110,110,87.31,82.41,110,87.31,98,82.41];
+  function leadNote(barIdx, t){ return t === 0 ? DRONE[barIdx % DRONE.length] : 0; }
+
+  let audioCtx = null, masterGain = null;
+  let started = false, hasAutoStarted = false, startTime = 0, lastScheduledBar = -1;
+  let kickEnv = 0, bassEnv = 0, melodyEnv = 0;
+  let lastFrame = performance.now();
+  const pendingVis = [];
+  let fuzzCurve = null;
+
+  function tickTime(tick){ return startTime + tick * TICK; }
+
+  function schedKick(at){
+    const o = audioCtx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(80, at);
+    o.frequency.exponentialRampToValueAtTime(28, at + 0.40);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.55, at);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.55);
+    const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=300;
+    o.connect(lp).connect(g).connect(masterGain);
+    o.start(at); o.stop(at + 0.60);
+  }
+  function schedHat(at){
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2.4, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1) * Math.exp(-i/(audioCtx.sampleRate*0.9));
+    const noise = audioCtx.createBufferSource(); noise.buffer = buf;
+    const hp = audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4500;
+    const bp = audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=7000; bp.Q.value=0.4;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.08, at);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 2.2);
+    noise.connect(hp).connect(bp).connect(g).connect(masterGain);
+    noise.start(at);
+  }
+  function schedSubBass(at){
+    const o = audioCtx.createOscillator(); o.type='sine';
+    o.frequency.setValueAtTime(41.20, at);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0, at);
+    g.gain.linearRampToValueAtTime(0.34, at + 0.18);
+    g.gain.setValueAtTime(0.34, at + SPB * 3);
+    g.gain.exponentialRampToValueAtTime(0.001, at + SPB * 4);
+    o.connect(g).connect(masterGain);
+    o.start(at); o.stop(at + SPB * 4 + 0.1);
+  }
+  function makeFuzzCurve(){
+    const n=1024; const c=new Float32Array(n);
+    for (let i=0;i<n;i++){ const x=(i/(n-1))*2-1; c[i]=Math.tanh(x*4)*0.9; }
+    return c;
+  }
+  function schedLead(at, freq){
+    if (!freq) return;
+    const o1 = audioCtx.createOscillator(); o1.type='sawtooth'; o1.frequency.setValueAtTime(freq, at); o1.detune.setValueAtTime(-7, at);
+    const o2 = audioCtx.createOscillator(); o2.type='sawtooth'; o2.frequency.setValueAtTime(freq*1.005, at); o2.detune.setValueAtTime(9, at);
+    const o3 = audioCtx.createOscillator(); o3.type='triangle'; o3.frequency.setValueAtTime(freq*0.5, at);
+    const lfo = audioCtx.createOscillator(); lfo.type='sine'; lfo.frequency.value=4.6;
+    const lfoG = audioCtx.createGain(); lfoG.gain.value=6;
+    lfo.connect(lfoG); lfoG.connect(o1.detune); lfoG.connect(o2.detune);
+    if (!fuzzCurve) fuzzCurve = makeFuzzCurve();
+    const sh = audioCtx.createWaveShaper(); sh.curve=fuzzCurve;
+    const lp = audioCtx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(380, at);
+    lp.frequency.linearRampToValueAtTime(900, at + 1.2);
+    lp.frequency.linearRampToValueAtTime(420, at + SPB*3.5);
+    lp.Q.value=2.2;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0, at);
+    g.gain.linearRampToValueAtTime(0.18, at + 0.45);
+    g.gain.setValueAtTime(0.18, at + SPB*3);
+    g.gain.exponentialRampToValueAtTime(0.001, at + SPB*4);
+    const dly = audioCtx.createDelay(1.0); dly.delayTime.value = SPB*0.75;
+    const dlyG = audioCtx.createGain(); dlyG.gain.value=0.32;
+    const dlyLp = audioCtx.createBiquadFilter(); dlyLp.type='lowpass'; dlyLp.frequency.value=1100;
+    const dlyFb = audioCtx.createGain(); dlyFb.gain.value=0.42;
+    o1.connect(sh); o2.connect(sh); o3.connect(sh);
+    sh.connect(lp).connect(g).connect(masterGain);
+    g.connect(dly).connect(dlyLp).connect(dlyG).connect(masterGain);
+    dlyLp.connect(dlyFb).connect(dly);
+    const stopAt = at + SPB*4 + 0.2;
+    o1.start(at); o1.stop(stopAt);
+    o2.start(at); o2.stop(stopAt);
+    o3.start(at); o3.stop(stopAt);
+    lfo.start(at); lfo.stop(stopAt);
+  }
+
+  function scheduleBar(barIdx){
+    if (!audioCtx) return;
+    for (let t = 0; t < BAR_TICKS; t++){
+      const gt = barIdx * BAR_TICKS + t;
+      if (gt >= TOTAL_TICKS) break;
+      const at = tickTime(gt);
+      if (isKick(t))    { schedKick(at);    pendingVis.push({t:at, type:'kick'}); }
+      if (isHat(t))     { schedHat(at); }
+      if (isSubBass(t)) { schedSubBass(at); pendingVis.push({t:at, type:'bass'}); }
+      const n = leadNote(barIdx, t);
+      if (n)            { schedLead(at, n); pendingVis.push({t:at, type:'melody'}); }
+      pendingVis.push({t:at, type:'tick', tick:gt});
+    }
+  }
+
+  function loop(now){
+    const dt = Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    kickEnv = Math.max(0, kickEnv - dt*3.2);
+    bassEnv = Math.max(0, bassEnv - dt*1.4);
+    melodyEnv = Math.max(0, melodyEnv - dt*0.45);
+
+    if (started && audioCtx){
+      const t = audioCtx.currentTime;
+      const elapsed = t - startTime;
+      const curBar = Math.floor(elapsed / (SPB * 4));
+      while (lastScheduledBar < curBar + 1 && lastScheduledBar < BARS - 1){
+        scheduleBar(lastScheduledBar + 1);
+        lastScheduledBar++;
+      }
+      while (pendingVis.length && pendingVis[0].t <= t){
+        const v = pendingVis.shift();
+        if (v.type === 'kick')   kickEnv = 1;
+        if (v.type === 'bass')   bassEnv = 1;
+        if (v.type === 'melody') melodyEnv = 1;
+        if (v.type === 'tick'){
+          const actions = tickActions[v.tick];
+          if (actions){
+            actions.forEach(a => {
+              if (a.word !== undefined && allWords[a.word]) allWords[a.word].classList.add('lit');
+              if (a.em !== undefined && ems[a.em]) ems[a.em].classList.add('ignited');
+            });
+          }
+          const sec = Math.floor((v.tick * TICK) % 60);
+          const m = Math.floor((v.tick * TICK) / 60);
+          if (tag) tag.innerHTML = 'TAPE A · ' + String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0') + '<br><b>BAR ' + (Math.floor(v.tick/16)+1) + ' / ' + BARS + '</b>';
+        }
+      }
+      if (lastScheduledBar >= BARS - 1 && t > startTime + TOTAL_TICKS * TICK + 1.5){
+        stop();
+      }
+    }
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,LW,LH);
+    const intensity = Math.min(1, kickEnv*0.5 + bassEnv*0.4 + melodyEnv*0.30 + 0.06);
+    const count = (120 + intensity*600) | 0;
+    for (let i = 0; i < count; i++){
+      if (Math.random() < 0.8){
+        ctx.fillStyle = 'rgba(255,255,255,' + (Math.random() * 0.22 * intensity).toFixed(3) + ')';
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.5).toFixed(3) + ')';
+      }
+      ctx.fillRect((Math.random()*LW)|0, (Math.random()*LH)|0, 1, 1);
+    }
+    if (kickEnv > 0.5){
+      ctx.fillStyle = 'rgba(240,45,20,' + (kickEnv * 0.18).toFixed(3) + ')';
+      ctx.fillRect(0,0,LW,LH);
+    }
+    if (melodyEnv > 0.2){
+      const y = (LH * 0.5) + Math.sin(now/220) * 6;
+      ctx.fillStyle = 'rgba(240,45,20,' + (melodyEnv * 0.20).toFixed(3) + ')';
+      ctx.fillRect(0, y, LW, 1);
+    }
+    const vu = Math.min(1, kickEnv*0.6 + bassEnv*0.4 + melodyEnv*0.4);
+    if (vuFill) vuFill.style.width = (vu * 100).toFixed(1) + '%';
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  function start(){
+    if (started) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0.55;
+      masterGain.connect(audioCtx.destination);
+    } catch(e){ audioCtx = null; }
+    if (audioCtx) startTime = audioCtx.currentTime + 0.06;
+    else startTime = performance.now() / 1000 + 0.06;
+    lastScheduledBar = -1;
+    pendingVis.length = 0;
+    allWords.forEach(w => w.classList.remove('lit'));
+    ems.forEach(e => e.classList.remove('ignited'));
+    started = true;
+    imgEl.classList.add('playing');
+    if (playLed) playLed.classList.add('on');
+    if (playLabel) playLabel.textContent = 'PLAYING';
+  }
+  function stop(){
+    started = false;
+    if (audioCtx){ try { audioCtx.close(); } catch(e){} audioCtx = null; }
+    imgEl.classList.remove('playing');
+    if (playLed) playLed.classList.remove('on');
+    if (playLabel) playLabel.textContent = 'COMPLETE';
+  }
+  imgEl.addEventListener('click', () => { if (!started) start(); else stop(); });
+
+  function checkAuto(){
+    if (hasAutoStarted || started) return;
+    const r = stanzaSection.getBoundingClientRect();
+    if (r.top < window.innerHeight * 0.6 && r.bottom > window.innerHeight * 0.4){
+      hasAutoStarted = true;
+      // keep site ambient playing underneath — same key (A minor)
+      start();
+    }
+  }
+  window.addEventListener('scroll', checkAuto, {passive:true});
+  checkAuto();
+})();
+
+/* ============ Site ambient bed + scroll-down jack-glitch SFX ============ */
+(function(){
+  let audioCtx = null, master = null, ambientGain = null;
+  let ambientStarted = false, ambientMuted = false;
+
+  function ensureCtx(){
+    if (audioCtx) return;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      master = audioCtx.createGain();
+      master.gain.value = 1.0;
+      master.connect(audioCtx.destination);
+    } catch(e){ audioCtx = null; }
+  }
+
+  function startAmbient(){
+    if (ambientStarted) return;
+    ensureCtx();
+    if (!audioCtx) return;
+    ambientStarted = true;
+
+    ambientGain = audioCtx.createGain();
+    ambientGain.gain.value = 0;
+    ambientGain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 6);
+    ambientGain.connect(master);
+
+    const o1 = audioCtx.createOscillator(); o1.type='sine'; o1.frequency.value = 55;
+    const o2 = audioCtx.createOscillator(); o2.type='sine'; o2.frequency.value = 82.41;
+    const o3 = audioCtx.createOscillator(); o3.type='sawtooth'; o3.frequency.value = 55;
+    o3.detune.value = -4;
+    const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 320; lp.Q.value = 0.8;
+    const lpLfo = audioCtx.createOscillator(); lpLfo.type='sine'; lpLfo.frequency.value = 0.05;
+    const lpLfoG = audioCtx.createGain(); lpLfoG.gain.value = 120;
+    lpLfo.connect(lpLfoG).connect(lp.frequency);
+    const oG = audioCtx.createGain(); oG.gain.value = 0.7;
+    o1.connect(oG); o2.connect(oG); o3.connect(oG);
+    oG.connect(lp).connect(ambientGain);
+
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+    const d = buf.getChannelData(0);
+    let b0=0, b1=0;
+    for (let i=0;i<d.length;i++){
+      const w = Math.random()*2-1;
+      b0 = 0.99*b0 + w*0.10;
+      b1 = 0.96*b1 + w*0.30;
+      d[i] = (b0+b1) * 0.18;
+    }
+    const noise = audioCtx.createBufferSource(); noise.buffer = buf; noise.loop = true;
+    const nHp = audioCtx.createBiquadFilter(); nHp.type='highpass'; nHp.frequency.value = 800;
+    const nLp = audioCtx.createBiquadFilter(); nLp.type='lowpass'; nLp.frequency.value = 3200;
+    const nG = audioCtx.createGain(); nG.gain.value = 0.10;
+    noise.connect(nHp).connect(nLp).connect(nG).connect(ambientGain);
+
+    [o1, o2, o3, lpLfo].forEach(o => o.start());
+    noise.start();
+  }
+
+  function muteAmbient(yes){
+    if (!ambientGain || !audioCtx) return;
+    ambientMuted = yes;
+    const t = audioCtx.currentTime;
+    ambientGain.gain.cancelScheduledValues(t);
+    ambientGain.gain.linearRampToValueAtTime(yes ? 0.0 : 0.08, t + 0.45);
+  }
+
+  let jackBuffer = null, jackLoading = false;
+  function loadJackBuffer(){
+    if (jackBuffer || jackLoading || !audioCtx) return;
+    jackLoading = true;
+    fetch('assets/jack-glitch.wav')
+      .then(r => r.arrayBuffer())
+      .then(ab => audioCtx.decodeAudioData(ab))
+      .then(buf => { jackBuffer = buf; jackLoading = false; })
+      .catch(() => { jackLoading = false; });
+  }
+
+  function glitch(){
+    if (!audioCtx || ambientMuted) return;
+    if (!jackBuffer){ loadJackBuffer(); return; }
+
+    const now = audioCtx.currentTime;
+    const totalDur = jackBuffer.duration;
+    // pick a random segment 0.18–0.50s long
+    const segDur = 0.18 + Math.random() * 0.32;
+    const maxStart = Math.max(0, totalDur - segDur - 0.02);
+    const offset = Math.random() * maxStart;
+
+    const src = audioCtx.createBufferSource();
+    src.buffer = jackBuffer;
+    src.playbackRate.value = 0.92 + Math.random() * 0.16;
+
+    const g = audioCtx.createGain();
+    const fadeIn = 0.005, fadeOut = 0.06;
+    g.gain.setValueAtTime(0.0, now);
+    g.gain.linearRampToValueAtTime(0.42, now + fadeIn);
+    g.gain.linearRampToValueAtTime(0.42, now + segDur - fadeOut);
+    g.gain.exponentialRampToValueAtTime(0.001, now + segDur);
+
+    const lp = audioCtx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.value = 2800 + Math.random() * 4000;
+    lp.Q.value = 0.6;
+
+    src.connect(lp).connect(g).connect(master);
+    src.start(now, offset, segDur);
+  }
+
+  window.__distoStartAmbient = function(){ ensureCtx(); if (!audioCtx) return; if (audioCtx.state === 'suspended') audioCtx.resume(); startAmbient(); loadJackBuffer(); loadPedalBuffer(); };
+  window.__distoMuteAmbient = muteAmbient;
+
+  // Pedal click buffer + detected click positions
+  let pedalBuffer = null, pedalLoading = false, pedalClicks = [];
+  function detectClicks(buffer){
+    // scan for amplitude transients — store start positions in seconds
+    const data = buffer.getChannelData(0);
+    const sr = buffer.sampleRate;
+    const win = Math.floor(sr * 0.010); // 10ms RMS window
+    const refractoryMs = 80;
+    const refractory = Math.floor(sr * refractoryMs / 1000);
+    // first pass: compute peak amplitude
+    let peak = 0;
+    for (let i = 0; i < data.length; i++){
+      const a = Math.abs(data[i]);
+      if (a > peak) peak = a;
+    }
+    const threshold = peak * 0.55;
+    const clicks = [];
+    let i = 0;
+    while (i < data.length){
+      if (Math.abs(data[i]) >= threshold){
+        // back up a few ms so we capture the attack
+        const startSample = Math.max(0, i - Math.floor(sr * 0.005));
+        clicks.push(startSample / sr);
+        i += refractory;
+      } else {
+        i++;
+      }
+    }
+    return clicks;
+  }
+  function loadPedalBuffer(){
+    if (pedalBuffer || pedalLoading || !audioCtx) return;
+    pedalLoading = true;
+    fetch((window.__resources && window.__resources.pedalClick) || 'assets/pedal-click.wav')
+      .then(r => r.arrayBuffer())
+      .then(ab => audioCtx.decodeAudioData(ab))
+      .then(buf => {
+        pedalBuffer = buf;
+        pedalClicks = detectClicks(buf);
+        pedalLoading = false;
+      })
+      .catch(() => { pedalLoading = false; });
+  }
+
+  // Pedal click — play from a detected click transient, not random
+  window.__distoPedalClick = function(){
+    ensureCtx();
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!pedalBuffer){ loadPedalBuffer(); return; }
+    const now = audioCtx.currentTime;
+    const totalDur = pedalBuffer.duration;
+    // grab from a detected click; fall back to a random offset
+    const startSec = pedalClicks.length
+      ? pedalClicks[Math.floor(Math.random() * pedalClicks.length)]
+      : Math.random() * Math.max(0, totalDur - 0.15);
+    const segDur = Math.min(0.16, Math.max(0, totalDur - startSec - 0.005));
+    if (segDur < 0.04) return;
+
+    const src = audioCtx.createBufferSource();
+    src.buffer = pedalBuffer;
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0, now);
+    g.gain.linearRampToValueAtTime(0.55, now + 0.002);
+    g.gain.linearRampToValueAtTime(0.55, now + segDur - 0.020);
+    g.gain.exponentialRampToValueAtTime(0.001, now + segDur);
+
+    src.connect(g).connect(master || audioCtx.destination);
+    src.start(now, startSec, segDur);
+  };
+
+  // Trigger glitch synchronously (used by gate ENTER)
+  window.__distoEnterGlitch = function(){
+    ensureCtx();
+    if (!audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    if (!jackBuffer){
+      loadJackBuffer();
+      const waitStart = performance.now();
+      const poll = setInterval(() => {
+        if (jackBuffer){ clearInterval(poll); glitch(); }
+        else if (performance.now() - waitStart > 2000){ clearInterval(poll); }
+      }, 60);
+      return;
+    }
+    glitch();
+  };
+
+  let lastY = window.scrollY;
+  let lastGlitch = 0;
+  function onScroll(){
+    const y = window.scrollY;
+    const dy = y - lastY;
+    lastY = y;
+    if (dy <= 6) return;
+    const now = performance.now();
+    if (now - lastGlitch < 600) return;
+    lastGlitch = now;
+    glitch();
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+
+  // Preload sound buffers immediately so they're ready before any interaction
+  (function preload(){
+    ensureCtx();
+    if (!audioCtx) return;
+    loadJackBuffer();
+    loadPedalBuffer();
+  })();
+
+  if (!document.getElementById('qgate')){
+    function kick(){
+      window.__distoStartAmbient();
+      window.removeEventListener('pointerdown', kick);
+      window.removeEventListener('keydown', kick);
+      window.removeEventListener('wheel', kick);
+    }
+    window.addEventListener('pointerdown', kick, {once:true, passive:true});
+    window.addEventListener('keydown', kick, {once:true});
+    window.addEventListener('wheel', kick, {once:true, passive:true});
+  }
+})();
+</script>
+</body>
+</html>
